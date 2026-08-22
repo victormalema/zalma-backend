@@ -1,5 +1,6 @@
 from database.supabase_client import get_supabase
 from models.user import public_user
+from services.wraps_service import generate_wrap
 from utils.security import (
     hash_password,
     verify_password,
@@ -69,6 +70,7 @@ def signup_user(email: str, password: str, name: str = None,
         ).execute()
 
     token = generate_token(user["id"])
+    generate_wrap(user["id"], "welcome", "Welcome to ZALMA")
     return token, public_user(user)
 
 

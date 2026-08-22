@@ -9,8 +9,10 @@ from routes.orders_routes import orders_bp
 from routes.rewards_routes import rewards_bp
 from routes.badges_routes import badges_bp
 from routes.wall_routes import wall_bp
-
-
+from routes.wraps_routes import wraps_bp
+from routes.tiers_routes import tiers_bp
+from routes.social_routes import social_bp
+from routes.unboxing_routes import unboxing_bp
 def create_app():
     Config.validate()
 
@@ -28,7 +30,10 @@ def create_app():
     app.register_blueprint(rewards_bp)
     app.register_blueprint(badges_bp)
     app.register_blueprint(wall_bp)
-
+    app.register_blueprint(wraps_bp)
+    app.register_blueprint(tiers_bp)
+    app.register_blueprint(social_bp)
+    app.register_blueprint(unboxing_bp)
     @app.route("/api/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok"}), 200

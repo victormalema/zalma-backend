@@ -20,14 +20,17 @@ class OrderError(Exception):
 
 
 def _credit_points(supabase, user_id: str, points: int, ptype: str, description: str, order_id: str = None):
-    """Adds points to a user's balance and logs the transaction."""
-    user_result = supabase.table("users").select("points_balance").eq("id", user_id).execute()
+    """Adds points to a user's balance and logs the transaction.
+    Also grows lifetime_xp by the same amount -- xp only ever goes up,
+    even if points later get redeemed, so rank never gets demoted."""
+    user_result = supabase.table("users").select("points_balance, lifetime_xp").eq("id", user_id).execute()
     if not user_result.data:
         return
     current_balance = user_result.data[0]["points_balance"]
-    supabase.table("users").update({"points_balance": current_balance + points}).eq(
-        "id", user_id
-    ).execute()
+    current_xp = user_result.data[0].get("lifetime_xp", 0)
+    supabase.table("users").update(
+        {"points_balance": current_balance + points, "lifetime_xp": current_xp + points}
+    ).eq("id", user_id).execute()
     supabase.table("rewards_ledger").insert(
         {
             "user_id": user_id,

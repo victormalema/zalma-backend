@@ -13,7 +13,7 @@ def get_leaderboard(limit: int = 10) -> list:
     supabase = get_supabase()
     result = (
         supabase.table("users")
-        .select("name, points_balance")
+        .select("id,name, points_balance")
         .order("points_balance", desc=True)
         .limit(limit)
         .execute()

@@ -1,6 +1,6 @@
 from database.supabase_client import get_supabase
 from models.badge import public_badge
-
+from services.wraps_service import generate_wrap
 
 def _user_stats(supabase, user_id: str) -> dict:
     orders_result = supabase.table("orders").select("id").eq("user_id", user_id).execute()
@@ -62,7 +62,7 @@ def check_and_unlock_badges(user_id: str) -> list:
                 {"user_id": user_id, "badge_id": badge["id"]}
             ).execute()
             newly_unlocked.append(badge)
-
+            generate_wrap(user_id, badge["code"], badge["name"])
     return newly_unlocked
 
 
