@@ -65,3 +65,34 @@ def submit_testimonial(user_id: str, content: str, image: str = None) -> dict:
         "message": "Thanks -- your testimonial is pending review before it appears on the Wall.",
         "testimonial_id": result.data[0]["id"],
     }
+def get_pending_testimonials() -> list:
+    supabase = get_supabase()
+    result = (
+        supabase.table("testimonials")
+        .select("*")
+        .eq("approved", False)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    testimonials = result.data
+    if not testimonials:
+        return []
+
+    user_ids = [t["user_id"] for t in testimonials]
+    users_result = supabase.table("users").select("id, name, email").in_("id", user_ids).execute()
+    users = {u["id"]: u for u in users_result.data}
+
+    return [public_testimonial(t, users.get(t["user_id"])) for t in testimonials]
+
+
+def moderate_testimonial(testimonial_id: str, approve: bool) -> dict:
+    supabase = get_supabase()
+    result = (
+        supabase.table("testimonials")
+        .update({"approved": approve})
+        .eq("id", testimonial_id)
+        .execute()
+    )
+    if not result.data:
+        raise WallError("Testimonial not found", 404)
+    return {"id": testimonial_id, "approved": approve}

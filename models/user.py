@@ -8,5 +8,6 @@ def public_user(user: dict) -> dict:
         "address": user.get("address"),
         "referral_code": user.get("referral_code"),
         "points_balance": user.get("points_balance", 0),
+        "is_admin": user.get("is_admin", False),
         "created_at": user.get("created_at"),
     }
