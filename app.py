@@ -13,6 +13,7 @@ from routes.wraps_routes import wraps_bp
 from routes.tiers_routes import tiers_bp
 from routes.social_routes import social_bp
 from routes.unboxing_routes import unboxing_bp
+from routes.admin_routes import admin_bp
 def create_app():
     Config.validate()
 
@@ -34,6 +35,7 @@ def create_app():
     app.register_blueprint(tiers_bp)
     app.register_blueprint(social_bp)
     app.register_blueprint(unboxing_bp)
+    app.register_blueprint(admin_bp)
     @app.route("/api/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok"}), 200
