@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, g
-from services.auth_service import signup_user, login_user, get_user_profile, AuthError
+from services.auth_service import signup_user, login_user, get_user_profile, google_login_user, AuthError
 from utils.middleware import require_auth
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -33,6 +33,17 @@ def login():
     except AuthError as e:
         return jsonify({"error": e.message}), e.status_code
 
+@auth_bp.route("/google", methods=["POST"])
+def google_auth():
+    data = request.get_json(silent=True) or {}
+    try:
+        token, user = google_login_user(
+            data.get("credential"),
+            referral_code=data.get("referral_code"),
+        )
+    except AuthError as e:
+        return jsonify({"error": e.message}), e.status_code
+    return jsonify({"token": token, "user": user})
 
 @auth_bp.route("/me", methods=["GET"])
 @require_auth
