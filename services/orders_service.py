@@ -72,7 +72,7 @@ def _maybe_grant_referral_bonus(supabase, user_id: str):
 
 def checkout(user_id: str, shipping_address: str) -> dict:
     if not shipping_address or not shipping_address.strip():
-        raise OrderError("shipping_address is required")
+        raise OrderError("Delivery address is required")
 
     supabase = get_supabase()
 
