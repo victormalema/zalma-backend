@@ -12,6 +12,7 @@ import os
 from flask import Blueprint, request, jsonify, g
 
 from services.mpesa_service import MpesaError
+from services.cleanup_service import release_abandoned_orders
 from services.orders_service import OrderError, claim_order_qr
 from services.payment_service import get_payment_status, handle_callback, initiate_payment
 from utils.middleware import require_auth
@@ -58,6 +59,23 @@ def payment_callback(secret):
         # Never let an error bubble back to Safaricom; log it so you can investigate.
         log.exception("Failed to process M-Pesa callback")
     return jsonify({"ResultCode": 0, "ResultDesc": "Accepted"}), 200
+
+
+# ---------------------------------------------------------------
+# Optional: an outside timer (e.g. cron-job.org, every 15 min) can call this to
+# release stock from abandoned orders even when nobody is using the site.
+# Disabled unless CRON_SECRET is set on the server.
+# ---------------------------------------------------------------
+@payments_bp.route("/payments/cleanup/<secret>", methods=["GET", "POST"])
+def cleanup(secret):
+    expected = os.environ.get("CRON_SECRET", "")
+    if not expected or not hmac.compare_digest(secret, expected):
+        return jsonify({"error": "Forbidden"}), 403
+    try:
+        return jsonify(release_abandoned_orders()), 200
+    except Exception:
+        log.exception("Cleanup run failed")
+        return jsonify({"error": "Cleanup failed"}), 500
 
 
 # ---------------------------------------------------------------

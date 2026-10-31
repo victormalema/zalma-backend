@@ -161,3 +161,44 @@ def parse_callback(body: dict) -> dict:
             elif name == "PhoneNumber":
                 result["phone"] = str(value)
     return result
+
+
+def stk_query(checkout_request_id: str) -> dict:
+    """Asks Safaricom what happened to an STK push.
+    Returns {"result_code": int | None, "result_desc": str}.
+      result_code 0      -> the customer paid
+      result_code other  -> cancelled / failed / timed out (1032, 1037, 2001 ...)
+      result_code None   -> no final answer yet (still processing, or Safaricom could not tell)
+    Raises MpesaError only if Safaricom cannot be reached or rejects our login."""
+    shortcode = _require_env("MPESA_SHORTCODE")
+    passkey = _require_env("MPESA_PASSKEY")
+
+    timestamp = datetime.now(ZoneInfo("Africa/Nairobi")).strftime("%Y%m%d%H%M%S")
+    password = base64.b64encode(f"{shortcode}{passkey}{timestamp}".encode()).decode()
+
+    try:
+        resp = requests.post(
+            f"{_base_url()}/mpesa/stkpushquery/v1/query",
+            json={
+                "BusinessShortCode": shortcode,
+                "Password": password,
+                "Timestamp": timestamp,
+                "CheckoutRequestID": checkout_request_id,
+            },
+            headers={"Authorization": f"Bearer {get_access_token()}"},
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        raise MpesaError(f"Could not reach M-Pesa: {e}")
+
+    try:
+        data = resp.json()
+    except ValueError:
+        return {"result_code": None, "result_desc": "Unreadable response"}
+
+    if "ResultCode" in data:
+        try:
+            return {"result_code": int(data["ResultCode"]), "result_desc": data.get("ResultDesc", "")}
+        except (TypeError, ValueError):
+            pass
+    return {"result_code": None, "result_desc": data.get("errorMessage") or data.get("ResultDesc") or ""}

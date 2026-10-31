@@ -91,6 +91,10 @@ def checkout(user_id: str, shipping_address: str) -> dict:
     if not shipping_address or not shipping_address.strip():
         raise OrderError("Delivery address is required")
 
+    # Free stock held by abandoned unpaid orders before we check availability.
+    from services.cleanup_service import run_cleanup_if_due   # local import: avoids a circular import
+    run_cleanup_if_due()
+
     supabase = get_supabase()
 
     cart = get_cart(user_id)

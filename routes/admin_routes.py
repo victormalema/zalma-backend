@@ -6,6 +6,7 @@ from services.admin_service import (
     update_order_status,
     AdminError,
 )
+from services.cleanup_service import run_cleanup_if_due
 from services.fulfilment_service import FulfilmentError, check_status_change, get_order_qr
 from utils.middleware import require_admin
 
@@ -27,6 +28,7 @@ def users():
 @admin_bp.route("/orders", methods=["GET"])
 @require_admin
 def orders():
+    run_cleanup_if_due()   # releases stock from abandoned unpaid orders (throttled, never raises)
     return jsonify({"orders": get_all_orders()}), 200
 
 
