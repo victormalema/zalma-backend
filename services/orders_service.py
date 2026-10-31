@@ -14,6 +14,19 @@ from models.order import public_order, public_order_item
 KES_PER_POINT = 100        # 1 point earned per 100 KES spent
 REFERRAL_BONUS_POINTS = 200  # flat bonus to the referrer on the referred user's first order
 
+# Delivery pricing (flat): Nairobi county vs everywhere else.
+DELIVERY_FEE_NAIROBI = 200
+DELIVERY_FEE_OTHER = 350
+
+
+def _delivery_fee(shipping_address: str) -> int:
+    """The checkout page saves the address as
+    'Name, Tel: ..., Location, County, Postal Code, Country'. The county comes from a
+    fixed dropdown, so it is the third item from the end."""
+    parts = [p.strip() for p in (shipping_address or "").split(",")]
+    county = parts[-3].lower() if len(parts) >= 3 else ""
+    return DELIVERY_FEE_NAIROBI if county == "nairobi" else DELIVERY_FEE_OTHER
+
 
 class OrderError(Exception):
     def __init__(self, message: str, status_code: int = 400):
@@ -98,8 +111,9 @@ def checkout(user_id: str, shipping_address: str) -> dict:
 
     subtotal = cart["subtotal"]
     discount = 0.0  # placeholder -- points redemption will plug in here later
-    total = round(subtotal - discount, 2)
-    points_earned = int(total // KES_PER_POINT)
+    delivery_fee = _delivery_fee(shipping_address)
+    total = round(subtotal - discount + delivery_fee, 2)   # what the customer pays via M-Pesa
+    points_earned = int((subtotal - discount) // KES_PER_POINT)   # points are on goods, not delivery
 
     order_insert = (
         supabase.table("orders")
@@ -109,6 +123,7 @@ def checkout(user_id: str, shipping_address: str) -> dict:
                 "status": "pending",
                 "subtotal": subtotal,
                 "discount": discount,
+                "delivery_fee": delivery_fee,
                 "total": total,
                 "shipping_address": shipping_address.strip(),
                 "points_earned": points_earned,
