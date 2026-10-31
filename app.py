@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask, jsonify
 from flask_cors import CORS
 from config import Config
@@ -14,6 +16,7 @@ from routes.tiers_routes import tiers_bp
 from routes.social_routes import social_bp
 from routes.unboxing_routes import unboxing_bp
 from routes.admin_routes import admin_bp
+from routes.payments_routes import payments_bp
 def create_app():
     Config.validate()
 
@@ -36,6 +39,7 @@ def create_app():
     app.register_blueprint(social_bp)
     app.register_blueprint(unboxing_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(payments_bp)
     @app.route("/api/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok"}), 200

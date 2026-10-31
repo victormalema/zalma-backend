@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 
 from google.auth.transport import requests as google_requests
