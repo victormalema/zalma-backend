@@ -6,6 +6,7 @@ from services.admin_service import (
     update_order_status,
     AdminError,
 )
+from services.fulfilment_service import FulfilmentError, check_status_change, get_order_qr
 from utils.middleware import require_admin
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -33,8 +34,22 @@ def orders():
 @require_admin
 def update_order(order_id):
     data = request.get_json(silent=True) or {}
+    new_status = data.get("status")
     try:
-        result = update_order_status(order_id, data.get("status"))
+        check_status_change(order_id, new_status)      # blocks e.g. pending -> shipped
+        result = update_order_status(order_id, new_status)
         return jsonify(result), 200
+    except FulfilmentError as e:
+        return jsonify({"error": e.message}), e.status_code
     except AdminError as e:
+        return jsonify({"error": e.message}), e.status_code
+
+
+# Data for the printable QR card that goes inside the package
+@admin_bp.route("/orders/<order_id>/qr", methods=["GET"])
+@require_admin
+def order_qr(order_id):
+    try:
+        return jsonify(get_order_qr(order_id)), 200
+    except FulfilmentError as e:
         return jsonify({"error": e.message}), e.status_code
