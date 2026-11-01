@@ -11,7 +11,8 @@ from models.order import public_order, public_order_item
 # Update these two numbers once the real rewards structure is decided,
 # nothing else needs to change.
 # ---------------------------------------------------------------
-KES_PER_POINT = 100        # 1 point earned per 100 KES spent
+POINTS_PER_PRODUCT = 50    # points earned per product bought (claimed by scanning the package card)
+KES_PER_POINT = 100        # no longer used for purchases; kept in case other code imports it
 REFERRAL_BONUS_POINTS = 200  # flat bonus to the referrer on the referred user's first order
 
 # Delivery pricing (flat): Nairobi county vs everywhere else.
@@ -117,7 +118,7 @@ def checkout(user_id: str, shipping_address: str) -> dict:
     discount = 0.0  # placeholder -- points redemption will plug in here later
     delivery_fee = _delivery_fee(shipping_address)
     total = round(subtotal - discount + delivery_fee, 2)   # what the customer pays via M-Pesa
-    points_earned = int((subtotal - discount) // KES_PER_POINT)   # points are on goods, not delivery
+    points_earned = POINTS_PER_PRODUCT * sum(item["quantity"] for item in cart["items"])   # per item bought, not per KES
 
     order_insert = (
         supabase.table("orders")

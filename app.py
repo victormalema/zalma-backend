@@ -1,3 +1,4 @@
+import os
 from dotenv import load_dotenv
 load_dotenv()
 from flask import Flask, jsonify
@@ -22,9 +23,10 @@ def create_app():
 
     app = Flask(__name__)
 
-    # Allow requests from your frontend. Tighten origins before going
-    # to production -- right now this allows any origin.
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+        # Only your own site may call the API from a browser.
+    allowed = os.environ.get("ALLOWED_ORIGINS", "https://zalma-frontend.onrender.com")
+    origins = [o.strip() for o in allowed.split(",") if o.strip()]
+    CORS(app, resources={r"/api/*": {"origins": origins}})
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
