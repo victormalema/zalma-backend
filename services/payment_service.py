@@ -3,6 +3,7 @@ services/payment_service.py
 Ties M-Pesa to orders: start a payment, handle Safaricom's callback, report status.
 """
 import logging
+import math
 from datetime import datetime, timezone
 
 from database.supabase_client import get_supabase
@@ -55,6 +56,16 @@ def handle_callback(body: dict):
     order = found.data[0]
 
     if result["result_code"] == 0:
+        # Real-money safety check: the amount M-Pesa collected must cover the order.
+        # (We always ask for the order total rounded up to whole shillings.)
+        expected = math.ceil(float(order["total"]))
+        if result["amount"] is not None and float(result["amount"]) < expected:
+            log.error(
+                "M-Pesa amount mismatch for order %s: paid %s, expected %s -- left pending for review",
+                order["id"], result["amount"], expected,
+            )
+            return
+
         # Atomic: only the first callback flips pending -> paid
         won = (
             supabase.table("orders")
