@@ -13,13 +13,22 @@ from flask import Blueprint, request, jsonify, g
 
 from services.mpesa_service import MpesaError
 from services.cleanup_service import release_abandoned_orders
-from services.orders_service import OrderError, claim_order_qr
+from services.orders_service import OrderError, claim_order_qr, delivery_fee_config
 from services.payment_service import get_payment_status, handle_callback, initiate_payment
 from utils.middleware import require_auth
 
 log = logging.getLogger(__name__)
 
 payments_bp = Blueprint("payments", __name__, url_prefix="/api")
+
+
+# ---------------------------------------------------------------
+# Public: current delivery pricing, so the checkout page always matches the server
+# GET /api/delivery-fees
+# ---------------------------------------------------------------
+@payments_bp.route("/delivery-fees", methods=["GET"])
+def delivery_fees():
+    return jsonify(delivery_fee_config()), 200
 
 
 # ---------------------------------------------------------------

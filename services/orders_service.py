@@ -1,3 +1,4 @@
+import os
 import secrets
 from datetime import datetime, timezone
 
@@ -20,10 +21,19 @@ DELIVERY_FEE_NAIROBI = 200
 DELIVERY_FEE_OTHER = 350
 
 
+def delivery_fee_config() -> dict:
+    """Switch delivery fees off with DELIVERY_FEES_ENABLED=false on the server
+    (handy for testing payments). The checkout page reads this too, so both agree."""
+    enabled = os.environ.get("DELIVERY_FEES_ENABLED", "true").strip().lower() not in ("false", "0", "no", "off")
+    return {"enabled": enabled, "nairobi": DELIVERY_FEE_NAIROBI, "other": DELIVERY_FEE_OTHER}
+
+
 def _delivery_fee(shipping_address: str) -> int:
     """The checkout page saves the address as
     'Name, Tel: ..., Location, County, Postal Code, Country'. The county comes from a
     fixed dropdown, so it is the third item from the end."""
+    if not delivery_fee_config()["enabled"]:
+        return 0
     parts = [p.strip() for p in (shipping_address or "").split(",")]
     county = parts[-3].lower() if len(parts) >= 3 else ""
     return DELIVERY_FEE_NAIROBI if county == "nairobi" else DELIVERY_FEE_OTHER
