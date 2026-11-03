@@ -1,20 +1,23 @@
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from database.supabase_client import get_supabase
 from services.cart_service import get_cart
 from services.badges_service import check_and_unlock_badges
 from models.order import public_order, public_order_item
+from services.points_service import award_points
+from services.rewards_config import (
+    POINTS_PER_KES_SPENT,
+    REFERRAL_FIRST_PURCHASE_POINTS,
+    REFERRAL_MAX_PER_YEAR,
+    purchase_points,
+)
 
-# ---------------------------------------------------------------
-# PLACEHOLDER REWARD RATES -- not finalized yet.
-# Update these two numbers once the real rewards structure is decided,
-# nothing else needs to change.
-# ---------------------------------------------------------------
-POINTS_PER_PRODUCT = 50    # points earned per product bought (claimed by scanning the package card)
-KES_PER_POINT = 100        # no longer used for purchases; kept in case other code imports it
-REFERRAL_BONUS_POINTS = 200  # flat bonus to the referrer on the referred user's first order
+# Reward numbers now live in services/rewards_config.py (one place to change them).
+# These two keep their old names in case other code imports them from here.
+KES_PER_POINT = int(round(1 / POINTS_PER_KES_SPENT))
+REFERRAL_BONUS_POINTS = REFERRAL_FIRST_PURCHASE_POINTS
 
 # Delivery pricing (flat): Nairobi county vs everywhere else.
 DELIVERY_FEE_NAIROBI = 200
@@ -46,27 +49,32 @@ class OrderError(Exception):
         self.status_code = status_code
 
 
-def _credit_points(supabase, user_id: str, points: int, ptype: str, description: str, order_id: str = None):
+def _credit_points(supabase, user_id: str, points: int, ptype: str, description: str,
+                   order_id: str = None, idempotency_key: str = None):
     """Adds points to a user's balance and logs the transaction.
-    Also grows lifetime_xp by the same amount -- xp only ever goes up,
-    even if points later get redeemed, so rank never gets demoted."""
-    user_result = supabase.table("users").select("points_balance, lifetime_xp").eq("id", user_id).execute()
-    if not user_result.data:
-        return
-    current_balance = user_result.data[0]["points_balance"]
-    current_xp = user_result.data[0].get("lifetime_xp", 0)
-    supabase.table("users").update(
-        {"points_balance": current_balance + points, "lifetime_xp": current_xp + points}
-    ).eq("id", user_id).execute()
-    supabase.table("rewards_ledger").insert(
-        {
-            "user_id": user_id,
-            "type": ptype,
-            "points": points,
-            "description": description,
-            "order_id": order_id,
-        }
-    ).execute()
+    Same signature as before (plus an optional idempotency_key); the work is done by
+    services/points_service.award_points. lifetime_xp still grows by the same amount and
+    never goes down, so rank never gets demoted."""
+    return award_points(
+        user_id, points, kind=ptype, description=description,
+        order_id=order_id, idempotency_key=idempotency_key,
+    )
+
+
+def _lifetime_points(supabase, user_id: str) -> int:
+    rows = supabase.table("users").select("lifetime_xp").eq("id", user_id).execute().data
+    return (rows[0].get("lifetime_xp") or 0) if rows else 0
+
+
+def _referrer_at_yearly_cap(supabase, referrer_id: str) -> bool:
+    """True if this referrer already earned the maximum referral rewards in the last 365 days."""
+    since = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
+    rows = (
+        supabase.table("rewards_ledger").select("id")
+        .eq("user_id", referrer_id).eq("type", "referral").gte("created_at", since)
+        .execute().data
+    )
+    return len(rows) >= REFERRAL_MAX_PER_YEAR
 
 
 def _maybe_grant_referral_bonus(supabase, user_id: str):
@@ -87,15 +95,18 @@ def _maybe_grant_referral_bonus(supabase, user_id: str):
         return
 
     referral = referral_result.data[0]
-    _credit_points(
-        supabase,
-        referral["referrer_id"],
-        REFERRAL_BONUS_POINTS,
-        "referral",
-        "Referral bonus -- your invite made their first purchase",
-    )
+    if not _referrer_at_yearly_cap(supabase, referral["referrer_id"]):
+        _credit_points(
+            supabase,
+            referral["referrer_id"],
+            REFERRAL_FIRST_PURCHASE_POINTS,
+            "referral",
+            "Referral bonus -- your invite made their first purchase",
+            idempotency_key=f"ref_purchase:{user_id}",
+        )
+        check_and_unlock_badges(referral["referrer_id"])
+    # marked done either way, so a capped referral is not retried on later orders
     supabase.table("referrals").update({"reward_granted": True}).eq("id", referral["id"]).execute()
-    check_and_unlock_badges(referral["referrer_id"])
 
 
 def checkout(user_id: str, shipping_address: str) -> dict:
@@ -128,7 +139,8 @@ def checkout(user_id: str, shipping_address: str) -> dict:
     discount = 0.0  # placeholder -- points redemption will plug in here later
     delivery_fee = _delivery_fee(shipping_address)
     total = round(subtotal - discount + delivery_fee, 2)   # what the customer pays via M-Pesa
-    points_earned = POINTS_PER_PRODUCT * sum(item["quantity"] for item in cart["items"])   # per item bought, not per KES
+    # 1 point per KES 100 of goods (delivery not counted), x the buyer's earn multiplier, capped per order
+    points_earned = purchase_points(subtotal - discount, _lifetime_points(supabase, user_id))
 
     order_insert = (
         supabase.table("orders")
@@ -280,7 +292,10 @@ def claim_order_qr(user_id: str, code: str) -> dict:
 
     points = order.get("points_earned") or 0
     if points > 0:
-        _credit_points(supabase, user_id, points, "earn", f"Order #{order['id'][:8]} (scanned)", order["id"])
+        _credit_points(
+            supabase, user_id, points, "earn", f"Order #{order['id'][:8]} (scanned)", order["id"],
+            idempotency_key=f"purchase:{order['id']}",
+        )
         check_and_unlock_badges(user_id)
 
     balance = supabase.table("users").select("points_balance").eq("id", user_id).execute().data[0]["points_balance"]
