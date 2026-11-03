@@ -1,16 +1,16 @@
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from database.supabase_client import get_supabase
 from services.cart_service import get_cart
 from services.badges_service import check_and_unlock_badges
 from models.order import public_order, public_order_item
 from services.points_service import award_points
+from services.referral_service import award_purchase_bonus
 from services.rewards_config import (
     POINTS_PER_KES_SPENT,
     REFERRAL_FIRST_PURCHASE_POINTS,
-    REFERRAL_MAX_PER_YEAR,
     purchase_points,
 )
 
@@ -66,17 +66,6 @@ def _lifetime_points(supabase, user_id: str) -> int:
     return (rows[0].get("lifetime_xp") or 0) if rows else 0
 
 
-def _referrer_at_yearly_cap(supabase, referrer_id: str) -> bool:
-    """True if this referrer already earned the maximum referral rewards in the last 365 days."""
-    since = (datetime.now(timezone.utc) - timedelta(days=365)).isoformat()
-    rows = (
-        supabase.table("rewards_ledger").select("id")
-        .eq("user_id", referrer_id).eq("type", "referral").gte("created_at", since)
-        .execute().data
-    )
-    return len(rows) >= REFERRAL_MAX_PER_YEAR
-
-
 def _maybe_grant_referral_bonus(supabase, user_id: str):
     """If this was the user's first order and they were referred, credit the referrer once."""
     orders_result = supabase.table("orders").select("id, status").eq("user_id", user_id).execute()
@@ -95,15 +84,9 @@ def _maybe_grant_referral_bonus(supabase, user_id: str):
         return
 
     referral = referral_result.data[0]
-    if not _referrer_at_yearly_cap(supabase, referral["referrer_id"]):
-        _credit_points(
-            supabase,
-            referral["referrer_id"],
-            REFERRAL_FIRST_PURCHASE_POINTS,
-            "referral",
-            "Referral bonus -- your invite made their first purchase",
-            idempotency_key=f"ref_purchase:{user_id}",
-        )
+    # second referral reward (the first was paid when the friend signed up); paid once per friend,
+    # and only for a referrer's first REFERRAL_MAX_PER_YEAR friends in a year
+    if award_purchase_bonus(referral).get("awarded"):
         check_and_unlock_badges(referral["referrer_id"])
     # marked done either way, so a capped referral is not retried on later orders
     supabase.table("referrals").update({"reward_granted": True}).eq("id", referral["id"]).execute()

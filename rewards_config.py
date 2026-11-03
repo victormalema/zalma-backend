@@ -27,9 +27,13 @@ EARN_MULTIPLIERS = [
 # ---------------------------------------------------------------
 # Earning: referrals
 # ---------------------------------------------------------------
-REFERRAL_FIRST_PURCHASE_POINTS = 300   # paid to the referrer when the friend's first order is paid
-REFERRAL_SIGNUP_POINTS = 0             # not paid: see notes (needs auth_service.py, and invites fake-account farming)
-REFERRAL_MAX_PER_YEAR = 10             # referral rewards one person can earn per rolling 365 days
+# A referral pays the referrer TWICE: a small reward when the friend joins with their code,
+# and a bigger one when that friend's first order is paid.
+REFERRAL_SIGNUP_POINTS = 50            # when a friend signs up with your code (kept small: fake accounts could farm it)
+REFERRAL_FIRST_PURCHASE_POINTS = 300   # when that friend's first order is paid
+REFERRAL_MAX_PER_YEAR = 10             # friends per rolling 365 days that earn rewards (both rewards count as one friend)
+# Friends who joined before this moment never earn the signup reward (stops back-paying old/test sign-ups).
+REFERRAL_SIGNUP_REWARDS_FROM = "2026-11-03T00:00:00+00:00"
 
 # ---------------------------------------------------------------
 # Earning: engagement (kept small on purpose -- NOT wired yet, needs social/unboxing services)

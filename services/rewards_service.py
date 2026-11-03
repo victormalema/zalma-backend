@@ -2,6 +2,7 @@ import secrets
 import string
 from database.supabase_client import get_supabase
 from models.rewards import public_ledger_entry, public_referral
+from services.referral_service import sweep_signup_bonuses
 from services.rewards_config import (
     KES_PER_POINT_REDEEMED,
     MAX_REDEMPTION_PERCENT_OF_ORDER,
@@ -28,6 +29,13 @@ def _generate_discount_code() -> str:
 
 def get_rewards_summary(user_id: str) -> dict:
     supabase = get_supabase()
+
+    # Pay any referral signup rewards not paid yet, before the balance is read.
+    # (Must never stop the page from loading.)
+    try:
+        sweep_signup_bonuses(user_id)
+    except Exception:
+        pass
 
     user_result = supabase.table("users").select("*").eq("id", user_id).execute()
     if not user_result.data:
