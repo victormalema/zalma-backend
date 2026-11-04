@@ -4,6 +4,9 @@ from services.admin_service import (
     get_all_users,
     get_all_orders,
     update_order_status,
+    get_all_preorders,
+    update_preorder_status,
+    set_preorder_item_active,
     AdminError,
 )
 from services.cleanup_service import run_cleanup_if_due
@@ -54,4 +57,32 @@ def order_qr(order_id):
     try:
         return jsonify(get_order_qr(order_id)), 200
     except FulfilmentError as e:
+        return jsonify({"error": e.message}), e.status_code
+
+
+# ---------- pre-orders ----------
+
+@admin_bp.route("/preorders", methods=["GET"])
+@require_admin
+def preorders():
+    return jsonify(get_all_preorders()), 200
+
+
+@admin_bp.route("/preorders/<preorder_id>", methods=["PATCH"])
+@require_admin
+def update_preorder(preorder_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(update_preorder_status(preorder_id, data.get("status"))), 200
+    except AdminError as e:
+        return jsonify({"error": e.message}), e.status_code
+
+
+@admin_bp.route("/preorder-items/<item_id>", methods=["PATCH"])
+@require_admin
+def update_preorder_item(item_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(set_preorder_item_active(item_id, data.get("is_active"))), 200
+    except AdminError as e:
         return jsonify({"error": e.message}), e.status_code

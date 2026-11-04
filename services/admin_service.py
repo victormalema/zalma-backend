@@ -1,5 +1,6 @@
 from database.supabase_client import get_supabase
 from datetime import datetime, timedelta, timezone
+import uuid
 
 VALID_STATUSES = ('pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled')
 
@@ -106,3 +107,107 @@ def update_order_status(order_id: str, new_status: str) -> dict:
         raise AdminError("Order not found", 404)
 
     return {"id": order_id, "status": new_status}
+
+
+# ---------- pre-orders ----------
+
+PREORDER_STATUSES = ('pending', 'confirmed', 'fulfilled', 'cancelled')
+# What a reservation may be changed to from each state
+PREORDER_NEXT = {
+    'pending': ('confirmed', 'cancelled'),
+    'confirmed': ('fulfilled', 'cancelled'),
+    'fulfilled': (),
+    'cancelled': (),
+}
+
+
+def _clean_uuid(value, label: str) -> str:
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError, TypeError):
+        raise AdminError("Invalid " + label)
+
+
+def get_all_preorders() -> dict:
+    """Every reservation (with customer + item details) and every pre-order item."""
+    supabase = get_supabase()
+
+    rows = supabase.table("preorders").select("*").order("created_at", desc=True).execute().data
+    items_data = (
+        supabase.table("preorder_items").select("*").order("created_at", desc=True).execute().data
+    )
+    items = {i["id"]: i for i in items_data}
+
+    users = {}
+    user_ids = list({r["user_id"] for r in rows})
+    if user_ids:
+        users_result = supabase.table("users").select("id, name, email").in_("id", user_ids).execute()
+        users = {u["id"]: u for u in users_result.data}
+
+    reserved_units = {}
+    preorders = []
+    for r in rows:
+        item = items.get(r["preorder_item_id"], {})
+        user = users.get(r["user_id"], {})
+        if r["status"] != "cancelled":
+            reserved_units[r["preorder_item_id"]] = (
+                reserved_units.get(r["preorder_item_id"], 0) + (r.get("quantity") or 0)
+            )
+        preorders.append({
+            "id": r["id"],
+            "status": r["status"],
+            "quantity": r.get("quantity"),
+            "size": r.get("size"),
+            "color": r.get("color"),
+            "phone": r.get("phone"),
+            "created_at": r["created_at"],
+            "item_name": item.get("name"),
+            "lot_label": item.get("lot_label"),
+            "customer_name": user.get("name"),
+            "customer_email": user.get("email"),
+        })
+
+    item_list = [
+        {
+            "id": i["id"],
+            "name": i["name"],
+            "price": i["price"],
+            "lot_label": i.get("lot_label"),
+            "closes_at": i.get("closes_at"),
+            "is_active": i["is_active"],
+            "reserved_units": reserved_units.get(i["id"], 0),
+        }
+        for i in items_data
+    ]
+    return {"preorders": preorders, "items": item_list}
+
+
+def update_preorder_status(preorder_id: str, new_status: str) -> dict:
+    preorder_id = _clean_uuid(preorder_id, "pre-order")
+    if new_status not in PREORDER_STATUSES:
+        raise AdminError("Invalid status. Must be one of: " + ", ".join(PREORDER_STATUSES))
+
+    supabase = get_supabase()
+    current = supabase.table("preorders").select("status").eq("id", preorder_id).execute().data
+    if not current:
+        raise AdminError("Pre-order not found", 404)
+
+    old_status = current[0]["status"]
+    if new_status != old_status:
+        if new_status not in PREORDER_NEXT.get(old_status, ()):
+            raise AdminError("A %s pre-order can't be changed to %s" % (old_status, new_status))
+        supabase.table("preorders").update({"status": new_status}).eq("id", preorder_id).execute()
+
+    return {"id": preorder_id, "status": new_status}
+
+
+def set_preorder_item_active(item_id: str, is_active) -> dict:
+    item_id = _clean_uuid(item_id, "item")
+    if not isinstance(is_active, bool):
+        raise AdminError("is_active must be true or false")
+
+    supabase = get_supabase()
+    result = supabase.table("preorder_items").update({"is_active": is_active}).eq("id", item_id).execute()
+    if not result.data:
+        raise AdminError("Item not found", 404)
+    return {"id": item_id, "is_active": is_active}
