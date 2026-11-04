@@ -18,6 +18,8 @@ from routes.social_routes import social_bp
 from routes.unboxing_routes import unboxing_bp
 from routes.admin_routes import admin_bp
 from routes.payments_routes import payments_bp
+from routes.wishlist_routes import wishlist_bp      
+from routes.preorder_routes import preorder_bp 
 def create_app():
     Config.validate()
 
@@ -42,6 +44,8 @@ def create_app():
     app.register_blueprint(unboxing_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(payments_bp)
+    app.register_blueprint(wishlist_bp)                 
+    app.register_blueprint(preorder_bp)
     @app.route("/api/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok"}), 200
