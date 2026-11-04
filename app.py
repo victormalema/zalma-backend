@@ -7,7 +7,7 @@ from config import Config
 from routes.auth_routes import auth_bp
 from routes.products_routes import products_bp
 from routes.cart_routes import cart_bp
-from routes.wishlist_routes import wishlist_bp
+from routes.preorder_routes import preorder_bp
 from routes.orders_routes import orders_bp
 from routes.rewards_routes import rewards_bp
 from routes.badges_routes import badges_bp
@@ -31,7 +31,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(cart_bp)
-    app.register_blueprint(wishlist_bp)
+    app.register_blueprint(preorder_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(rewards_bp)
     app.register_blueprint(badges_bp)
