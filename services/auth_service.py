@@ -73,6 +73,8 @@ def signup_user(email: str, password: str, name: str = None,
         phone = clean_phone(phone)
     except ValidationError as e:
         raise AuthError(str(e))
+    if not name:
+        raise AuthError("Name is required")
 
     supabase = get_supabase()
 
