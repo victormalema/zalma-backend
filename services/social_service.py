@@ -1,4 +1,5 @@
 from database.supabase_client import get_supabase
+from services.points_service import _is_duplicate, award_points
 
 # ---------------------------------------------------------------
 # PLACEHOLDER POINTS RATE -- matches the mock UI's "+25 pts" per platform.
@@ -44,8 +45,28 @@ def claim_follow(user_id: str, platform: str) -> dict:
     if existing.data:
         raise SocialError(f"Already claimed for {platform}", 409)
 
-    supabase.table("social_follows").insert({"user_id": user_id, "platform": platform}).execute()
-    _credit_points(supabase, user_id, POINTS_PER_FOLLOW, f"Followed ZALMA on {platform.capitalize()}")
+    # Claim row first. The unique index on (user_id, platform) (see security_indexes.sql)
+    # makes a second concurrent request fail here instead of paying twice.
+    try:
+        inserted = supabase.table("social_follows").insert({"user_id": user_id, "platform": platform}).execute()
+    except Exception as err:
+        if _is_duplicate(err):
+            raise SocialError(f"Already claimed for {platform}", 409)
+        raise
+    claim_id = inserted.data[0].get("id") if inserted.data else None
+
+    try:
+        # Same safe path every other reward uses: ledger row + guarded balance update,
+        # and the idempotency key means this exact award can never be paid twice.
+        award_points(
+            user_id, POINTS_PER_FOLLOW, kind="earn",
+            description=f"Followed ZALMA on {platform.capitalize()}",
+            idempotency_key=f"social:{user_id}:{platform}",
+        )
+    except Exception:
+        if claim_id:   # points were not paid, so release the claim so the user can retry
+            supabase.table("social_follows").delete().eq("id", claim_id).execute()
+        raise
 
     return {"platform": platform, "points_awarded": POINTS_PER_FOLLOW}
 

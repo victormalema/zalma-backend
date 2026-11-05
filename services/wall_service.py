@@ -1,5 +1,6 @@
 from database.supabase_client import get_supabase
 from models.wall import public_leaderboard_entry, public_testimonial
+from utils.validation import ValidationError, clean_https_url
 
 
 class WallError(Exception):
@@ -46,6 +47,14 @@ def submit_testimonial(user_id: str, content: str, image: str = None) -> dict:
         raise WallError("content is required")
     if len(content.strip()) > 1000:
         raise WallError("content must be 1000 characters or fewer")
+
+    if image:
+        try:
+            image = clean_https_url(image, label="image link")
+        except ValidationError as e:
+            raise WallError(str(e))
+    else:
+        image = None
 
     supabase = get_supabase()
     result = (

@@ -7,6 +7,7 @@ from google.oauth2 import id_token as google_id_token
 from database.supabase_client import get_supabase
 from models.user import public_user
 from services.wraps_service import generate_wrap
+from utils.validation import ValidationError, clean_name, clean_phone, valid_email
 from utils.security import (
     hash_password,
     verify_password,
@@ -61,8 +62,17 @@ def signup_user(email: str, password: str, name: str = None,
 
     if not email or not password:
         raise AuthError("email and password are required")
+    if not valid_email(email):
+        raise AuthError("Please enter a valid email address")
     if len(password) < 8:
         raise AuthError("password must be at least 8 characters")
+    if len(password.encode("utf-8")) > 72:
+        raise AuthError("password must be 72 bytes or fewer")
+    try:
+        name = clean_name(name)
+        phone = clean_phone(phone)
+    except ValidationError as e:
+        raise AuthError(str(e))
 
     supabase = get_supabase()
 
@@ -139,7 +149,10 @@ def google_login_user(credential: str, referral_code: str = None) -> tuple[str, 
 
     google_id = info["sub"]
     email = info["email"].strip().lower()
-    name = info.get("name")
+    try:
+        name = clean_name(info.get("name"))
+    except ValidationError:
+        name = None   # never block a Google sign-in over a odd display name; just drop it
 
     supabase = get_supabase()
 

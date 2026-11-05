@@ -24,6 +24,7 @@ def create_app():
     Config.validate()
 
     app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = 256 * 1024   # no request body over 256 KB
 
         # Only your own site may call the API from a browser.
     allowed = os.environ.get("ALLOWED_ORIGINS", "https://zalma-frontend.onrender.com")
@@ -52,6 +53,10 @@ def create_app():
     @app.errorhandler(404)
     def not_found(e):
         return jsonify({"error": "Not found"}), 404
+
+    @app.errorhandler(413)
+    def too_large(e):
+        return jsonify({"error": "Request too large"}), 413
 
     @app.errorhandler(500)
     def server_error(e):
