@@ -15,7 +15,7 @@ from routes.wall_routes import wall_bp
 from routes.wraps_routes import wraps_bp
 from routes.tiers_routes import tiers_bp
 from routes.social_routes import social_bp
-from routes.unboxing_routes import unboxing_bp
+#from routes.unboxing_routes import unboxing_bp
 from routes.admin_routes import admin_bp
 from routes.payments_routes import payments_bp
 from routes.wishlist_routes import wishlist_bp      
@@ -42,7 +42,7 @@ def create_app():
     app.register_blueprint(wraps_bp)
     app.register_blueprint(tiers_bp)
     app.register_blueprint(social_bp)
-    app.register_blueprint(unboxing_bp)
+    # app.register_blueprint(unboxing_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(wishlist_bp)                 

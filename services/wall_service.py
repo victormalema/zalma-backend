@@ -43,9 +43,18 @@ def get_testimonials() -> list:
 
 
 def submit_testimonial(user_id: str, content: str, image: str = None) -> dict:
-    if not content or not content.strip():
+    if content is None or content == "":
         raise WallError("content is required")
-    if len(content.strip()) > 1000:
+
+    if not isinstance(content, str):
+        raise WallError("content must be text")
+
+    content = content.strip()
+
+    if not content:
+        raise WallError("content is required")
+
+    if len(content) > 1000:
         raise WallError("content must be 1000 characters or fewer")
 
     if image:

@@ -38,10 +38,6 @@ def get_dashboard_stats() -> dict:
     pending_testimonials = (
         supabase.table("testimonials").select("id", count="exact").eq("approved", False).execute()
     )
-    pending_unboxing = (
-        supabase.table("unboxing_submissions").select("id", count="exact").eq("status", "pending").execute()
-    )
-
     return {
         "total_revenue": round(revenue, 2),
         "total_orders": len(orders),
@@ -52,7 +48,7 @@ def get_dashboard_stats() -> dict:
         "points_issued": points_issued,
         "points_redeemed": points_redeemed,
         "pending_testimonials_count": pending_testimonials.count or 0,
-        "pending_unboxing_count": pending_unboxing.count or 0,
+
     }
 
 
