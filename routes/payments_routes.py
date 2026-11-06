@@ -58,7 +58,12 @@ def pay():
 @payments_bp.route("/payments/callback/<secret>", methods=["POST"])
 def payment_callback(secret):
     expected = os.environ.get("MPESA_CALLBACK_SECRET", "")
-    if not expected or not hmac.compare_digest(secret, expected):
+    previous = os.environ.get("MPESA_CALLBACK_SECRET_PREVIOUS", "")
+
+    valid_current = bool(expected) and hmac.compare_digest(secret, expected)
+    valid_previous = bool(previous) and hmac.compare_digest(secret, previous)
+
+    if not (valid_current or valid_previous):
         return jsonify({"error": "Forbidden"}), 403
 
     body = request.get_json(silent=True) or {}
