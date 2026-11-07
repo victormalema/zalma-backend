@@ -75,14 +75,13 @@ def handle_callback(body: dict):
         if won.data:
             complete_order_after_payment(order["id"])
     else:
-        won = (
-            supabase.table("orders")
-            .update({"status": "payment_failed"})
-            .eq("id", order["id"]).eq("status", "pending").execute()
+        processed = cancel_unpaid_order(order["id"])
+        log.info(
+            "M-Pesa payment not completed for order %s: %s (failure processed: %s)",
+            order["id"],
+            result["result_desc"],
+            processed,
         )
-        if won.data:
-            cancel_unpaid_order(order["id"])
-        log.info("M-Pesa payment not completed for order %s: %s", order["id"], result["result_desc"])
 
 
 def get_payment_status(user_id: str, order_id: str) -> dict:

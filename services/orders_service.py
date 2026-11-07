@@ -220,23 +220,13 @@ def complete_order_after_payment(order_id: str):
     check_and_unlock_badges(user_id)
 
 
-def cancel_unpaid_order(order_id: str):
-    """Gives reserved stock back after a failed / cancelled / timed-out payment."""
-    supabase = get_supabase()
-    items = supabase.table("order_items").select("product_id, quantity").eq("order_id", order_id).execute().data
-    if not items:
-        return
-    product_ids = [i["product_id"] for i in items]
-    products = {
-        p["id"]: p
-        for p in supabase.table("products").select("id, stock").in_("id", product_ids).execute().data
-    }
-    for i in items:
-        product = products.get(i["product_id"])
-        if product:
-            supabase.table("products").update(
-                {"stock": product["stock"] + i["quantity"]}
-            ).eq("id", product["id"]).execute()
+def cancel_unpaid_order(order_id: str) -> bool:
+    """Atomically fail a pending order and restore its reserved stock once."""
+    result = get_supabase().rpc(
+        "fail_unpaid_order_and_restore_stock",
+        {"p_order_id": order_id},
+    ).execute()
+    return bool(result.data)
 
 
 # ---------------------------------------------------------------
