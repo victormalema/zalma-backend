@@ -90,13 +90,8 @@ def release_abandoned_orders() -> dict:
                 complete_order_after_payment(order["id"])
                 counts["marked_paid"] += 1
         else:
-            won = (
-                supabase.table("orders")
-                .update({"status": "payment_failed"})
-                .eq("id", order["id"]).eq("status", "pending").execute()
-            )
-            if won.data:
-                cancel_unpaid_order(order["id"])   # give the reserved stock back
+            processed = cancel_unpaid_order(order["id"])
+            if processed:
                 counts["cancelled"] += 1
 
     if any(counts.values()):
